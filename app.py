@@ -62,6 +62,10 @@ class UnifiedProcessor:
                     header = str(cell.value).strip()
                     headers[header] = col_idx
             
+            # DEBUG: Print all headers found
+            st.write(f"🔍 **Sheet '{sheet_name}' Headers:**")
+            st.write(headers)
+            
             if 'ΟΝΟΜΑ' not in headers:
                 continue
             
@@ -96,11 +100,17 @@ class UnifiedProcessor:
                 
                 # FIX v3.9.1: Try multiple column name variants for Greek knowledge
                 greek_raw = None
+                found_column = None
                 for possible_header in ['ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ ΓΝΩΣΗ ΕΛΛΗΝΙΚΩΝ', 
-                                       'ΚΑΛΗ_ΓΝΩΣΗ', 'ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ']:
+                                       'ΚΑΛΗ_ΓΝΩΣΗ', 'ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ']:
                     greek_raw = safe_get(possible_header, None)
                     if greek_raw is not None:
+                        found_column = possible_header
                         break
+                
+                # DEBUG: Print which column was found (only first 3 students)
+                if row_idx <= 4:
+                    st.write(f"Row {row_idx} ({name}): Found column '{found_column}' with value '{greek_raw}'")
                 
                 if greek_raw is None or greek_raw == '':
                     greek_val = 'Ν'  # Default to ΝΑΙ only if empty
