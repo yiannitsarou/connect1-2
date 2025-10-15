@@ -1219,9 +1219,17 @@ def main():
                     with st.expander("Λεπτομέρειες"):
                         import traceback
                         st.code(traceback.format_exc())
-    else:
+     else:
         st.info("👆 Ανέβασε και τα δύο αρχεία")
     
     st.markdown("---")
     st.markdown(
-        "<div style='
+        "<div style='text-align: center; color: gray;'>"
+        "v3.9 FINAL | Using .startswith() from working code ✅"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+
+if __name__ == '__main__':
+    main()
