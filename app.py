@@ -94,18 +94,21 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                # Read greek knowledge (Ν/Ο) - NOT A LOCKED FIELD!
+                # Read greek knowledge (Ν/Ο) - Support BOTH Greek and Latin O!
                 greek_raw = safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', None)
                 
                 if greek_raw is None or greek_raw == '':
                     greek_val = 'Ν'
                 else:
-                    greek_str = greek_raw.strip()
-                    if greek_str == 'Ο':
-                        greek_val = 'Ο'
-                    elif greek_str == 'Ν':
-                        greek_val = 'Ν'
+                    greek_str = greek_raw.strip().upper()
+                    
+                    # Support BOTH Greek Ο (U+039F) and Latin O (U+004F)
+                    if greek_str in ['Ο', 'O']:  # Greek Omicron OR Latin O
+                        greek_val = 'Ο'  # Always store as Greek Ο
+                    elif greek_str in ['Ν', 'N']:  # Greek Nu OR Latin N
+                        greek_val = 'Ν'  # Always store as Greek Ν
                     else:
+                        print(f"⚠️  Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
                         greek_val = 'Ν'
                 
                 self.students_data[name] = StudentData(
