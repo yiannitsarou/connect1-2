@@ -460,6 +460,7 @@ class UnifiedProcessor:
             elif 'Καλή Γνώση' in category or 'Καλή γνώση' in category:
                 greek_a = greek_b = 'Ν'
             elif 'Μικτής' in category or 'μικτής' in category.lower():
+                # For mixed, keep Ν as default
                 greek_a = greek_b = 'Ν'
             
             is_locked = (locked_val == 'LOCKED')
@@ -511,10 +512,15 @@ class UnifiedProcessor:
             gender = self._get_cell_value(sheet, row_idx, gender_col, 'Α')
             
             raw_greek = sheet.cell(row_idx, greek_col).value if greek_col else 'Ν'
-            if raw_greek and str(raw_greek).strip() == 'Ν':
-                greek = 'Ν'
-            elif raw_greek and str(raw_greek).strip() == 'Ο':
-                greek = 'Ο'
+            if raw_greek:
+                greek_str = str(raw_greek).strip().upper()
+                # Support BOTH Greek Ο and Latin O
+                if greek_str in ['Ν', 'N']:
+                    greek = 'Ν'
+                elif greek_str in ['Ο', 'O']:
+                    greek = 'Ο'
+                else:
+                    greek = 'Ν'
             else:
                 greek = 'Ν'
             
@@ -587,9 +593,10 @@ class UnifiedProcessor:
                 elif s.gender == 'Κ':
                     girls += 1
                 
-                if s.greek_knowledge == 'Ν':
+                # Support BOTH Greek Ο (U+039F) and Latin O (U+004F)
+                if s.greek_knowledge in ['Ν', 'N']:  # Greek Nu OR Latin N
                     greek_yes += 1
-                elif s.greek_knowledge == 'Ο':
+                elif s.greek_knowledge in ['Ο', 'O']:  # Greek Omicron OR Latin O
                     greek_no += 1
                 
                 if s.choice == 1:
@@ -942,9 +949,17 @@ class UnifiedProcessor:
                 continue
             
             student = self.students[name]
+            
+            # FIX v3.7: Normalize greek_knowledge to Greek chars
+            greek_val = student.greek_knowledge
+            if greek_val in ['N', 'n']:
+                greek_val = 'Ν'  # Force Greek Nu
+            elif greek_val in ['O', 'o']:
+                greek_val = 'Ο'  # Force Greek Omicron
+            
             sheet.cell(row_idx, 1).value = student.name
             sheet.cell(row_idx, 2).value = student.gender
-            sheet.cell(row_idx, 3).value = student.greek_knowledge
+            sheet.cell(row_idx, 3).value = greek_val  # Use normalized value
             sheet.cell(row_idx, 4).value = student.choice
             sheet.cell(row_idx, 5).value = ', '.join(student.friends)
             
@@ -1206,7 +1221,7 @@ def main():
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: gray;'>"
-        "v3.5 | FIX: Locked = ΖΩΗΡΟΣ/ΠΑΙΔΙ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ (Ν), NOT Greek knowledge ⚡"
+        "v3.6 | FIX: Support Greek Ο + Latin O for ΚΑΛΗ_ΓΝΩΣΗ ⚡"
         "</div>",
         unsafe_allow_html=True
     )
