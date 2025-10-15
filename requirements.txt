@@ -1,2 +1,7 @@
+# Core dependencies για Unified Team Optimizer
 streamlit==1.31.0
 openpyxl==3.1.2
+
+# Optional (μόνο για development)
+# pandas==2.2.0  # Για statistics display (προαιρετικό)
+# pytest==8.0.0  # Για tests (μόνο dev)

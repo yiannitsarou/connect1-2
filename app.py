@@ -11,6 +11,46 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 import io
 
+# --- Robust normalization helpers (accept Greek/Latin & words) ---
+def _norm_binary_NO(value, default='Ν') -> str:
+    """Return 'Ν' (yes/good) or 'Ο' (no/not good) from messy inputs.
+    Accepts Greek/Latin letters and words like NAI/OXI/YES/NO/1/0.
+    """
+    if value is None:
+        return default
+    t = str(value).strip().upper()
+    # Normalize lookalikes: Latin to Greek
+    t = t.replace('N', 'Ν').replace('O', 'Ο')
+    # Accept words/numerics
+    if t in {'Ν', 'ΝΑΙ', 'YES', 'Y', '1', 'TRUE'}:
+        return 'Ν'
+    if t in {'Ο', 'ΟΧΙ', 'OXI', 'NO', 'NΟ', '0', 'FALSE'}:
+        # Note: 'NΟ' here is N + Greek Omicron (handles mixed typing)
+        return 'Ο'
+    # Fallback: first char rule if it's Ν/Ο
+    if t.startswith('Ν'):
+        return 'Ν'
+    if t.startswith('Ο'):
+        return 'Ο'
+    return default
+
+def _norm_gender(value, default='Α') -> str:
+    """Return 'Α' (Αγόρι) or 'Κ' (Κορίτσι) from Greek/Latin inputs."""
+    if value is None:
+        return default
+    t = str(value).strip().upper()
+    t = t.replace('A', 'Α').replace('K', 'Κ')
+    # Keywords (Greeklish)
+    if 'AGOR' in t or 'ΑΓΟΡ' in t:
+        return 'Α'
+    if 'KOR' in t or 'ΚΟΡ' in t:
+        return 'Κ'
+    # Single letters after replacement
+    if t in {'Α', 'Κ'}:
+        return t
+    return default
+
+
 
 @dataclass
 class StudentData:
@@ -93,18 +133,11 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                # FIX: Normalize Greek Ο (U+039F) → Latin O (U+004F)
-                greek_val = safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'Ν')
-                if greek_val in ['Ο', 'O', 'o']:  # Greek Ο, Latin O, lowercase
-                    greek_val = 'Ο'  # Normalize to Greek Ο
-                elif greek_val in ['Ν', 'N', 'n']:  # Greek Ν, Latin N, lowercase
-                    greek_val = 'Ν'  # Normalize to Greek Ν
-                else:
-                    greek_val = 'Ν'  # Default to ΝΑΙ
+                greek_val = _norm_binary_NO(safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'Ν'))
                 
                 self.students_data[name] = StudentData(
                     name=name,
-                    gender=safe_get('ΦΥΛΟ', 'Κ'),
+                    gender=_norm_gender(safe_get('ΦΥΛΟ', 'Α')),
                     teacher_child=safe_get('ΠΑΙΔΙ_ΕΚΠΑΙΔΕΥΤΙΚΟΥ', 'Ο'),
                     calm=safe_get('ΖΩΗΡΟΣ', 'Ο'),
                     special_needs=safe_get('ΙΔΙΑΙΤΕΡΟΤΗΤΑ', 'Ο'),
@@ -500,15 +533,10 @@ class UnifiedProcessor:
             epidosh_col = headers.get('ΕΠΙΔΟΣΗ') or headers.get('ΕΠΙΔΟΣΗ')
             locked_col = headers.get('LOCKED')
             
-            gender = self._get_cell_value(sheet, row_idx, gender_col, 'Α')
+            gender = _norm_gender(self._get_cell_value(sheet, row_idx, gender_col, 'Α'))
             
             raw_greek = sheet.cell(row_idx, greek_col).value if greek_col else 'Ν'
-            if raw_greek and str(raw_greek).strip().upper().startswith('Ν'):
-                greek = 'Ν'
-            elif raw_greek and str(raw_greek).strip().upper().startswith('Ο'):
-                greek = 'Ο'
-            else:
-                greek = 'Ν'
+            greek = _norm_binary_NO(raw_greek, 'Ν')
             
             raw_epidosh = sheet.cell(row_idx, epidosh_col).value if epidosh_col else 1
             try:
