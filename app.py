@@ -93,13 +93,22 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
+                # FIX: Normalize Greek Ο (U+039F) → Latin O (U+004F)
+                greek_val = safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'Ν')
+                if greek_val in ['Ο', 'O', 'o']:  # Greek Ο, Latin O, lowercase
+                    greek_val = 'Ο'  # Normalize to Greek Ο
+                elif greek_val in ['Ν', 'N', 'n']:  # Greek Ν, Latin N, lowercase
+                    greek_val = 'Ν'  # Normalize to Greek Ν
+                else:
+                    greek_val = 'Ν'  # Default to ΝΑΙ
+                
                 self.students_data[name] = StudentData(
                     name=name,
                     gender=safe_get('ΦΥΛΟ', 'Κ'),
                     teacher_child=safe_get('ΠΑΙΔΙ_ΕΚΠΑΙΔΕΥΤΙΚΟΥ', 'Ο'),
                     calm=safe_get('ΖΩΗΡΟΣ', 'Ο'),
                     special_needs=safe_get('ΙΔΙΑΙΤΕΡΟΤΗΤΑ', 'Ο'),
-                    greek_knowledge=safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'Ν'),
+                    greek_knowledge=greek_val,
                     friends=friends,
                     conflicts=0,
                     choice=choice_val
@@ -570,9 +579,10 @@ class UnifiedProcessor:
                 elif s.gender == 'Κ':
                     girls += 1
                 
+                # FIX: Check for Greek Ο (not Latin O)
                 if s.greek_knowledge == 'Ν':
                     greek_yes += 1
-                elif s.greek_knowledge == 'Ο':
+                elif s.greek_knowledge == 'Ο':  # Greek Ο (U+039F)
                     greek_no += 1
                 
                 if s.choice == 1:
