@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unified Team Optimizer - Fill & Optimize in 1-Click
-FIX v3.9 FINAL: Use .startswith() from working code + support Ν/N variants everywhere
+FIX v3.9.2 FINAL: Correct Greek knowledge reading and writing
 """
 import streamlit as st
 import openpyxl
@@ -62,10 +62,6 @@ class UnifiedProcessor:
                     header = str(cell.value).strip()
                     headers[header] = col_idx
             
-            # DEBUG: Print all headers found
-            st.write(f"🔍 **Sheet '{sheet_name}' Headers:**")
-            st.write(headers)
-            
             if 'ΟΝΟΜΑ' not in headers:
                 continue
             
@@ -98,20 +94,15 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                # FIX v3.9.1: Try multiple column name variants for Greek knowledge
+                # FIX v3.9.2: Try multiple column name variants for Greek knowledge
                 greek_raw = None
-                found_column = None
                 for possible_header in ['ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ ΓΝΩΣΗ ΕΛΛΗΝΙΚΩΝ', 
-                                       'ΚΑΛΗ_ΓΝΩΣΗ', 'ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ']:
+                                       'ΚΑΛΗ_ΓΝΩΣΗ', 'ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ']:
                     greek_raw = safe_get(possible_header, None)
                     if greek_raw is not None:
-                        found_column = possible_header
                         break
                 
-                # DEBUG: Print which column was found (only first 3 students)
-                if row_idx <= 4:
-                    st.write(f"Row {row_idx} ({name}): Found column '{found_column}' with value '{greek_raw}'")
-                
+                # Process Greek knowledge value
                 if greek_raw is None or greek_raw == '':
                     greek_val = 'Ν'  # Default to ΝΑΙ only if empty
                 else:
@@ -139,6 +130,7 @@ class UnifiedProcessor:
                 )
         
         wb.close()
+        st.success(f"✅ Διαβάστηκαν {len(self.students_data)} μαθητές από source file")
     
     def fill_target_excel(self, target_bytes: bytes) -> bytes:
         """Συμπλήρωση STEP7_FINAL_SCENARIO (in-memory)"""
@@ -146,7 +138,9 @@ class UnifiedProcessor:
         
         for sheet_name in wb.sheetnames:
             sheet = wb[sheet_name]
-            self._fill_sheet(sheet, sheet_name)
+            filled_count = self._fill_sheet(sheet, sheet_name)
+            if filled_count > 0:
+                st.info(f"📝 Sheet '{sheet_name}': {filled_count} μαθητές")
         
         self._create_categorization_sheet(wb)
         
@@ -202,28 +196,32 @@ class UnifiedProcessor:
             student_data = self.students_data[name]
             self.teams_students[team_name].append(name)
             
+            # Fill ΦΥΛΟ
             if 'ΦΥΛΟ' in headers_map:
                 col = headers_map['ΦΥΛΟ']
                 sheet.cell(row_idx, col).value = student_data.gender
                 sheet.cell(row_idx, col).alignment = Alignment(horizontal='center', vertical='center')
             
+            # Fill ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ - FIX: Write the actual value from student_data
             if 'ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ' in headers_map:
                 col = headers_map['ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ']
                 sheet.cell(row_idx, col).value = student_data.greek_knowledge
                 sheet.cell(row_idx, col).alignment = Alignment(horizontal='center', vertical='center')
             
+            # Also check for any other variant of the header
             for key in headers_map.keys():
                 if 'ΚΑΛΗ' in key and 'ΓΝΩΣΗ' in key and 'ΕΛΛΗΝΙΚΩΝ' in key:
                     col = headers_map[key]
                     sheet.cell(row_idx, col).value = student_data.greek_knowledge
                     sheet.cell(row_idx, col).alignment = Alignment(horizontal='center', vertical='center')
-                    break
             
+            # Fill ΦΙΛΟΙ
             if 'ΦΙΛΟΙ' in headers_map:
                 col = headers_map['ΦΙΛΟΙ']
                 sheet.cell(row_idx, col).value = ', '.join(student_data.friends) if student_data.friends else ''
                 sheet.cell(row_idx, col).alignment = Alignment(horizontal='left', vertical='center')
             
+            # Fill ΕΠΙΔΟΣΗ
             if 'ΕΠΙΔΟΣΗ' in headers_map:
                 col = headers_map['ΕΠΙΔΟΣΗ']
                 sheet.cell(row_idx, col).value = student_data.choice
@@ -1107,14 +1105,15 @@ def main():
         layout="wide"
     )
     
-    st.title("🎯 Unified Team Optimizer v3.9 FINAL")
+    st.title("🎯 Unified Team Optimizer v3.9.2 FINAL")
     st.markdown("---")
     
     with st.expander("📖 Οδηγίες Χρήσης", expanded=False):
         st.markdown("""
-        **FIX v3.9 FINAL:** 
-        - ✅ Use .startswith() όπως working code (robust για ΝΑΙ/ΟΧΙ)
-        - ✅ Support Ν/N variants σε ΟΛΑ τα σημεία (_get_team_stats + _calc_asymmetric_improvement)
+        **FIX v3.9.2 FINAL:** 
+        - ✅ Correct Greek knowledge reading from source (Ν/Ο)
+        - ✅ Correct Greek knowledge writing to target Excel
+        - ✅ Support Ν/N variants σε ΟΛΑ τα σημεία
         
         **Workflow:**
         1. Ανέβασε **Παράδειγμα1.xlsx** (δεδομένα μαθητών)
@@ -1150,7 +1149,6 @@ def main():
                     template_bytes = template_file.read()
                     
                     processor.read_source_data(source_bytes)
-                    st.success(f"✅ Βρέθηκαν {len(processor.students_data)} μαθητές")
                     
                     filled_bytes = processor.fill_target_excel(template_bytes)
                     st.success("✅ Excel συμπληρώθηκε")
@@ -1238,7 +1236,7 @@ def main():
         st.info("👆 Ανέβασε και τα δύο αρχεία")
     
     st.markdown("---")
-    st.success("✅ v3.9 FINAL | Using .startswith() from working code")
+    st.success("✅ v3.9.2 FINAL | Fixed Greek knowledge reading & writing")
 
 
 if __name__ == '__main__':
