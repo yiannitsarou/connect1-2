@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unified Team Optimizer - Fill & Optimize in 1-Click
-FIX v3.4: Ν=ΝΑΙ (locked U+039D), Ο=ΌΧΙ (normal U+039F) για ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ
+FIX v3.5: CRITICAL - Ν/Ο στα LOCKED fields (ΖΩΗΡΟΣ/ΠΑΙΔΙ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ), όχι στη ΓΝΩΣΗ!
 """
 import streamlit as st
 import openpyxl
@@ -74,7 +74,6 @@ class UnifiedProcessor:
                 
                 name = str(name).strip()
                 
-                # Helper function for safe cell reading
                 def safe_get(header, default=''):
                     if header in headers:
                         col_idx = headers[header]
@@ -83,11 +82,9 @@ class UnifiedProcessor:
                             return str(val).strip()
                     return default
                 
-                # Read ΦΙΛΟΙ
                 friends_str = safe_get('ΦΙΛΟΙ', '')
                 friends = [f.strip() for f in friends_str.split(',') if f.strip()] if friends_str else []
                 
-                # Read ΕΠΙΔΟΣΗ
                 choice_val = 1
                 if 'ΕΠΙΔΟΣΗ' in headers:
                     epidosi_cell = sheet.cell(row_idx, headers['ΕΠΙΔΟΣΗ']).value
@@ -97,21 +94,18 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                # FIX v3.4: Read greek knowledge with GREEK Ν/Ο characters
+                # Read greek knowledge (Ν/Ο) - NOT A LOCKED FIELD!
                 greek_raw = safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', None)
                 
                 if greek_raw is None or greek_raw == '':
-                    greek_val = 'Ν'  # Default to ΝΑΙ
+                    greek_val = 'Ν'
                 else:
-                    # CRITICAL: Use GREEK characters Ν (U+039D) and Ο (U+039F)
                     greek_str = greek_raw.strip()
-                    
-                    if greek_str == 'Ο':  # Greek Omicron U+039F = ΌΧΙ
+                    if greek_str == 'Ο':
                         greek_val = 'Ο'
-                    elif greek_str == 'Ν':  # Greek Nu U+039D = ΝΑΙ
+                    elif greek_str == 'Ν':
                         greek_val = 'Ν'
                     else:
-                        print(f"⚠️  Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
                         greek_val = 'Ν'
                 
                 self.students_data[name] = StudentData(
@@ -146,7 +140,7 @@ class UnifiedProcessor:
         return output.getvalue()
     
     def _fill_sheet(self, sheet, team_name: str) -> int:
-        """Συμπλήρωση ενός sheet - FIX: Προσθήκη στηλών αν λείπουν"""
+        """Συμπλήρωση ενός sheet"""
         headers_map = {}
         for col_idx, cell in enumerate(sheet[1], start=1):
             if cell.value:
@@ -157,13 +151,11 @@ class UnifiedProcessor:
         if 'ΟΝΟΜΑ' not in headers_map:
             return 0
         
-        # FIX: Αν το template έχει μόνο ΟΝΟΜΑ, προσθέτουμε headers
         required_headers = ['ΦΥΛΟ', 'ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ', 'ΕΠΙΔΟΣΗ', 'ΦΙΛΟΙ']
         next_col = max(headers_map.values()) + 1
         
         for req_header in required_headers:
             if req_header not in headers_map:
-                # Προσθήκη header
                 cell = sheet.cell(1, next_col)
                 original_header = req_header.replace('ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ')
                 cell.value = original_header
@@ -202,7 +194,6 @@ class UnifiedProcessor:
                 sheet.cell(row_idx, col).value = student_data.greek_knowledge
                 sheet.cell(row_idx, col).alignment = Alignment(horizontal='center', vertical='center')
             
-            # Also check for the underscore version
             for key in headers_map.keys():
                 if 'ΚΑΛΗ' in key and 'ΓΝΩΣΗ' in key and 'ΕΛΛΗΝΙΚΩΝ' in key:
                     col = headers_map[key]
@@ -307,7 +298,11 @@ class UnifiedProcessor:
         self._create_single_sheet(workbook, all_students, processed)
     
     def _is_student_locked(self, student: StudentData) -> bool:
-        """FIX: Ν = ΝΑΙ (locked), Ο = ΌΧΙ (normal)"""
+        """
+        FIX v3.5 CRITICAL: Ελέγχουμε ΖΩΗΡΟΣ, ΠΑΙΔΙ_ΕΚΠΑΙΔΕΥΤΙΚΟΥ, ΙΔΙΑΙΤΕΡΟΤΗΤΑ
+        Ν = ΝΑΙ (locked) σε αυτά τα πεδία
+        Η ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ ΔΕΝ είναι locked field!
+        """
         return (student.calm == 'Ν' or 
                 student.teacher_child == 'Ν' or 
                 student.special_needs == 'Ν')
@@ -396,15 +391,12 @@ class UnifiedProcessor:
         """Φόρτωση δεδομένων από filled Excel για optimization"""
         wb = openpyxl.load_workbook(io.BytesIO(filled_bytes), data_only=True)
         
-        # Load από ΚΑΤΗΓΟΡΙΟΠΟΙΗΣΗ
         if 'ΚΑΤΗΓΟΡΙΟΠΟΙΗΣΗ' in wb.sheetnames:
             self._load_from_kategoriopoihsh(wb['ΚΑΤΗΓΟΡΙΟΠΟΙΗΣΗ'])
         
-        # Load από SINGLE
         if 'SINGLE' in wb.sheetnames:
             self._load_from_single(wb['SINGLE'])
         
-        # Load team assignments
         for sheet_name in wb.sheetnames:
             if sheet_name in ['ΚΑΤΗΓΟΡΙΟΠΟΙΗΣΗ', 'SINGLE']:
                 continue
@@ -506,11 +498,11 @@ class UnifiedProcessor:
             if name in self.students:
                 continue
             
-            gender_col = headers.get('ΦΥΛΟ') or headers.get('ΦΥΛΟ')
+            gender_col = headers.get('ΦΥΛΟ')
             greek_col = (headers.get('ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ') or 
                         headers.get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ') or
                         headers.get('ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ'))
-            epidosh_col = headers.get('ΕΠΙΔΟΣΗ') or headers.get('ΕΠΙΔΟΣΗ')
+            epidosh_col = headers.get('ΕΠΙΔΟΣΗ')
             locked_col = headers.get('LOCKED')
             
             gender = self._get_cell_value(sheet, row_idx, gender_col, 'Α')
@@ -577,7 +569,7 @@ class UnifiedProcessor:
         }
     
     def _get_team_stats(self) -> Dict:
-        """FIX: Διορθωμένη μέτρηση γλώσσας με Ν/Ο"""
+        """Μέτρηση stats ανά τμήμα"""
         stats = {}
         for team_name, student_names in self.teams.items():
             boys = girls = greek_yes = greek_no = ep1 = ep2 = ep3 = 0
@@ -592,7 +584,6 @@ class UnifiedProcessor:
                 elif s.gender == 'Κ':
                     girls += 1
                 
-                # FIX: Check for Greek Ν (U+039D) and Ο (U+039F)
                 if s.greek_knowledge == 'Ν':
                     greek_yes += 1
                 elif s.greek_knowledge == 'Ο':
@@ -652,7 +643,7 @@ class UnifiedProcessor:
         return applied_swaps, final_spreads
     
     def _generate_asymmetric_swaps(self, max_team: str, min_team: str) -> List[Dict]:
-        """Γέννηση asymmetric swaps με 8 priorities"""
+        """Γέννηση asymmetric swaps"""
         swaps = []
         
         max_solos_ep3 = self._get_solos_with_ep3(max_team)
@@ -682,8 +673,7 @@ class UnifiedProcessor:
                             'priority': 1
                         })
         
-        # P2-P8: Additional priorities (keeping full logic)
-        # P2: Pair(ep3+X)↔Pair(ep1/2)
+        # P2: Pair swaps
         for pair_max in max_pairs_ep3:
             for pair_min in min_pairs_non_ep3:
                 if (pair_max['student_a'].gender == pair_min['student_a'].gender and
@@ -707,7 +697,7 @@ class UnifiedProcessor:
                             'priority': 2
                         })
         
-        # P3-P8: Relaxed matching (same logic as original)
+        # P3: Relaxed (only gender match)
         for solo_max in max_solos_ep3:
             for solo_min in min_solos_non_ep3:
                 if solo_max['student'].gender == solo_min['student'].gender:
@@ -814,7 +804,7 @@ class UnifiedProcessor:
     
     def _calc_asymmetric_improvement(self, team_high: str, names_out: List[str],
                                       team_low: str, names_in: List[str]) -> Dict:
-        """FIX: Διορθωμένος υπολογισμός με Ν/Ο"""
+        """Υπολογισμός improvement"""
         stats_before = self._get_team_stats()
         stats_after = {k: v.copy() for k, v in stats_before.items()}
         
@@ -915,7 +905,7 @@ class UnifiedProcessor:
             self.teams[from_team].append(name)
     
     def export_optimized_excel(self, applied_swaps: List[Dict], final_spreads: Dict) -> bytes:
-        """Εξαγωγή μόνο optimized teams + stats + swaps"""
+        """Εξαγωγή optimized Excel"""
         wb = openpyxl.Workbook()
         wb.remove(wb.active)
         
@@ -1043,8 +1033,8 @@ class UnifiedProcessor:
     def _create_swaps_log_sheet(self, wb, swaps: List[Dict]) -> None:
         sheet = wb.create_sheet('ΕΦΑΡΜΟΣΜΕΝΑ_SWAPS')
         
-        headers = ['#', 'Τύπος', 'Από Τμήμα', 'Μαθητές OUT (ep3)', 
-                   'Προς Τμήμα', 'Μαθητές IN (ep1/2)', 'Δ_ep3', 'Δ_φύλου', 'Δ_γνώσης', 'Priority']
+        headers = ['#', 'Τύπος', 'Από Τμήμα', 'Μαθητές OUT', 
+                   'Προς Τμήμα', 'Μαθητές IN', 'Δ_ep3', 'Δ_φύλου', 'Δ_γνώσης', 'Priority']
         
         for col_idx, header in enumerate(headers, start=1):
             cell = sheet.cell(1, col_idx)
@@ -1070,16 +1060,8 @@ class UnifiedProcessor:
             for col in range(1, 11):
                 sheet.cell(idx + 1, col).alignment = Alignment(horizontal='center', vertical='center')
         
-        sheet.column_dimensions['A'].width = 8
-        sheet.column_dimensions['B'].width = 25
-        sheet.column_dimensions['C'].width = 15
-        sheet.column_dimensions['D'].width = 35
-        sheet.column_dimensions['E'].width = 15
-        sheet.column_dimensions['F'].width = 35
-        sheet.column_dimensions['G'].width = 10
-        sheet.column_dimensions['H'].width = 10
-        sheet.column_dimensions['I'].width = 10
-        sheet.column_dimensions['J'].width = 10
+        for col, width in [('A',8),('B',25),('C',15),('D',35),('E',15),('F',35),('G',10),('H',10),('I',10),('J',10)]:
+            sheet.column_dimensions[col].width = width
 
 
 def main():
@@ -1089,50 +1071,34 @@ def main():
         layout="wide"
     )
     
-    st.title("🎯 Unified Team Optimizer - Fill & Optimize in 1-Click")
+    st.title("🎯 Unified Team Optimizer v3.5")
     st.markdown("---")
     
     with st.expander("📖 Οδηγίες Χρήσης", expanded=False):
         st.markdown("""
+        **FIX v3.5:** CRITICAL - Locked fields είναι τα ΖΩΗΡΟΣ/ΠΑΙΔΙ_ΕΚΠΑΙΔΕΥΤΙΚΟΥ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ (Ν=locked).
+        Η ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ είναι απλά χαρακτηριστικό για balancing!
+        
         **Workflow:**
-        1. Ανέβασε **Παράδειγμα1.xlsx** (πηγή δεδομένων μαθητών)
+        1. Ανέβασε **Παράδειγμα1.xlsx** (δεδομένα μαθητών)
         2. Ανέβασε **STEP7_TEMPLATE.xlsx** (template τμημάτων)
         3. Πάτα "⚡ Fill & Optimize"
-        4. Κατέβασε **ΒΕΛΤΙΩΜΕΝΗ_ΚΑΤΑΝΟΜΗ.xlsx** (τελικό αποτέλεσμα)
+        4. Κατέβασε **ΒΕΛΤΙΩΜΕΝΗ_ΚΑΤΑΝΟΜΗ.xlsx**
         
-        **Τι κάνει:**
-        - ✅ Συμπληρώνει το template με δεδομένα μαθητών
-        - ✅ Δημιουργεί ΚΑΤΗΓΟΡΙΟΠΟΙΗΣΗ + SINGLE sheets (εσωτερικά)
-        - ✅ Εκτελεί asymmetric optimization για balanced teams
-        - ✅ Εξάγει μόνο: Α1, Α2... + ΒΕΛΤΙΩΜΕΝΗ_ΣΤΑΤΙΣΤΙΚΗ + ΕΦΑΡΜΟΣΜΕΝΑ_SWAPS
-        
-        **Στόχοι:**
-        - Spread Επίδοσης 3: ≤ 3 ✅
-        - Spread Φύλου: ≤ 4 ✅
-        - Spread Γνώσης: ≤ 4 ✅
-        
-        **FIX v3.4:** Ν=ΝΑΙ (locked), Ο=ΌΧΙ (normal) για ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ
+        **Στόχοι:** Spread Επ3 ≤3, Φύλου ≤4, Γνώσης ≤4
         """)
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("📥 Πηγή Δεδομένων")
-        source_file = st.file_uploader(
-            "Ανέβασε το Παράδειγμα1.xlsx",
-            type=['xlsx'],
-            key='source'
-        )
+        source_file = st.file_uploader("Ανέβασε Παράδειγμα1.xlsx", type=['xlsx'], key='source')
         if source_file:
             st.success(f"✅ {source_file.name}")
     
     with col2:
         st.subheader("📄 Template")
-        template_file = st.file_uploader(
-            "Ανέβασε το STEP7_TEMPLATE.xlsx",
-            type=['xlsx'],
-            key='template'
-        )
+        template_file = st.file_uploader("Ανέβασε STEP7_TEMPLATE.xlsx", type=['xlsx'], key='template')
         if template_file:
             st.success(f"✅ {template_file.name}")
     
@@ -1140,11 +1106,9 @@ def main():
     
     if source_file and template_file:
         if st.button("⚡ Fill & Optimize", type="primary", use_container_width=True):
-            with st.spinner("📄 Phase 1/2: Filling Excel..."):
+            with st.spinner("📄 Phase 1/2: Filling..."):
                 try:
                     processor = UnifiedProcessor()
-                    
-                    # Phase 1: Fill
                     source_bytes = source_file.read()
                     template_bytes = template_file.read()
                     
@@ -1155,17 +1119,15 @@ def main():
                     st.success("✅ Excel συμπληρώθηκε")
                     
                 except Exception as e:
-                    st.error(f"❌ Σφάλμα στο Phase 1: {str(e)}")
+                    st.error(f"❌ Σφάλμα Phase 1: {str(e)}")
                     st.stop()
             
-            with st.spinner("📄 Phase 2/2: Optimizing teams..."):
+            with st.spinner("📄 Phase 2/2: Optimizing..."):
                 try:
-                    # Phase 2: Optimize
                     processor.load_filled_data(filled_bytes)
-                    
                     spreads_before = processor.calculate_spreads()
                     
-                    st.info("📊 **ΠΡΙΝ την Βελτιστοποίηση:**")
+                    st.info("📊 **ΠΡΙΝ:**")
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Spread Επ3", spreads_before['ep3'])
@@ -1179,61 +1141,44 @@ def main():
                     applied_swaps, spreads_after = processor.optimize(max_iterations=100)
                     
                     st.markdown("---")
-                    st.success("✅ **ΜΕΤΑ την Βελτιστοποίηση:**")
+                    st.success("✅ **ΜΕΤΑ:**")
                     
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric(
-                            "Spread Επ3", 
-                            spreads_after['ep3'],
-                            delta=-(spreads_before['ep3'] - spreads_after['ep3']),
-                            delta_color="inverse"
-                        )
+                        st.metric("Spread Επ3", spreads_after['ep3'], 
+                                 delta=-(spreads_before['ep3'] - spreads_after['ep3']), delta_color="inverse")
                         if spreads_after['ep3'] <= 3:
-                            st.success("✅ Στόχος επιτεύχθηκε!")
+                            st.success("✅")
                         else:
-                            st.warning(f"⚠️ Στόχος: ≤ 3")
+                            st.warning("⚠️ ≤3")
                     
                     with col2:
-                        st.metric(
-                            "Spread Αγόρια",
-                            spreads_after['boys'],
-                            delta=-(spreads_before['boys'] - spreads_after['boys']),
-                            delta_color="inverse"
-                        )
+                        st.metric("Spread Αγόρια", spreads_after['boys'],
+                                 delta=-(spreads_before['boys'] - spreads_after['boys']), delta_color="inverse")
                         if spreads_after['boys'] <= 4:
                             st.success("✅")
                         else:
-                            st.warning("⚠️ ≤ 4")
+                            st.warning("⚠️ ≤4")
                     
                     with col3:
-                        st.metric(
-                            "Spread Κορίτσια",
-                            spreads_after['girls'],
-                            delta=-(spreads_before['girls'] - spreads_after['girls']),
-                            delta_color="inverse"
-                        )
+                        st.metric("Spread Κορίτσια", spreads_after['girls'],
+                                 delta=-(spreads_before['girls'] - spreads_after['girls']), delta_color="inverse")
                         if spreads_after['girls'] <= 4:
                             st.success("✅")
                         else:
-                            st.warning("⚠️ ≤ 4")
+                            st.warning("⚠️ ≤4")
                     
                     with col4:
-                        st.metric(
-                            "Spread Γνώση",
-                            spreads_after['greek_yes'],
-                            delta=-(spreads_before['greek_yes'] - spreads_after['greek_yes']),
-                            delta_color="inverse"
-                        )
+                        st.metric("Spread Γνώση", spreads_after['greek_yes'],
+                                 delta=-(spreads_before['greek_yes'] - spreads_after['greek_yes']), delta_color="inverse")
                         if spreads_after['greek_yes'] <= 4:
                             st.success("✅")
                         else:
-                            st.warning("⚠️ ≤ 4")
+                            st.warning("⚠️ ≤4")
                     
                     st.markdown("---")
-                    st.info(f"🔄 **Εφαρμόστηκαν {len(applied_swaps)} swaps συνολικά**")
+                    st.info(f"🔄 **{len(applied_swaps)} swaps εφαρμόστηκαν**")
                     
-                    # Export
                     output_bytes = processor.export_optimized_excel(applied_swaps, spreads_after)
                     
                     st.download_button(
@@ -1248,17 +1193,17 @@ def main():
                     st.balloons()
                     
                 except Exception as e:
-                    st.error(f"❌ Σφάλμα στο Phase 2: {str(e)}")
+                    st.error(f"❌ Σφάλμα Phase 2: {str(e)}")
                     with st.expander("Λεπτομέρειες"):
                         import traceback
                         st.code(traceback.format_exc())
     else:
-        st.info("👆 Ανέβασε και τα δύο αρχεία για να ξεκινήσεις")
+        st.info("👆 Ανέβασε και τα δύο αρχεία")
     
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: gray;'>"
-        "Unified Team Optimizer v3.4 | FIX: Ν/Ο Greek chars ⚡"
+        "v3.5 | FIX: Locked = ΖΩΗΡΟΣ/ΠΑΙΔΙ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ (Ν), NOT Greek knowledge ⚡"
         "</div>",
         unsafe_allow_html=True
     )
