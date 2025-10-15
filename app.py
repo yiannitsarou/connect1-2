@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unified Team Optimizer - Fill & Optimize in 1-Click
-FIX v3.5: CRITICAL - Ν/Ο στα LOCKED fields (ΖΩΗΡΟΣ/ΠΑΙΔΙ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ), όχι στη ΓΝΩΣΗ!
+FIX v3.9 FINAL: Use .startswith() from working code + support Ν/N variants everywhere
 """
 import streamlit as st
 import openpyxl
@@ -460,7 +460,6 @@ class UnifiedProcessor:
             elif 'Καλή Γνώση' in category or 'Καλή γνώση' in category:
                 greek_a = greek_b = 'Ν'
             elif 'Μικτής' in category or 'μικτής' in category.lower():
-                # For mixed, keep Ν as default
                 greek_a = greek_b = 'Ν'
             
             is_locked = (locked_val == 'LOCKED')
@@ -593,10 +592,10 @@ class UnifiedProcessor:
                 elif s.gender == 'Κ':
                     girls += 1
                 
-                # Support BOTH Greek Ο (U+039F) and Latin O (U+004F)
-                if s.greek_knowledge in ['Ν', 'N']:  # Greek Nu OR Latin N
+                # FIX v3.9: Support BOTH Greek Ν (U+039D) and Latin N (U+004E)
+                if s.greek_knowledge in ['Ν', 'N']:
                     greek_yes += 1
-                elif s.greek_knowledge in ['Ο', 'O']:  # Greek Omicron OR Latin O
+                elif s.greek_knowledge in ['Ο', 'O']:
                     greek_no += 1
                 
                 if s.choice == 1:
@@ -814,7 +813,7 @@ class UnifiedProcessor:
     
     def _calc_asymmetric_improvement(self, team_high: str, names_out: List[str],
                                       team_low: str, names_in: List[str]) -> Dict:
-        """Υπολογισμός improvement"""
+        """FIX v3.9: Support Ν/N variants in improvement calculation"""
         stats_before = self._get_team_stats()
         stats_after = {k: v.copy() for k, v in stats_before.items()}
         
@@ -824,7 +823,8 @@ class UnifiedProcessor:
                 if s.choice == 3: stats_after[team_high]['ep3'] -= 1
                 if s.gender == 'Α': stats_after[team_high]['boys'] -= 1
                 elif s.gender == 'Κ': stats_after[team_high]['girls'] -= 1
-                if s.greek_knowledge == 'Ν': stats_after[team_high]['greek_yes'] -= 1
+                # FIX: Support both Ν and N
+                if s.greek_knowledge in ['Ν', 'N']: stats_after[team_high]['greek_yes'] -= 1
         
         for name in names_in:
             if name in self.students:
@@ -832,7 +832,8 @@ class UnifiedProcessor:
                 if s.choice == 3: stats_after[team_high]['ep3'] += 1
                 if s.gender == 'Α': stats_after[team_high]['boys'] += 1
                 elif s.gender == 'Κ': stats_after[team_high]['girls'] += 1
-                if s.greek_knowledge == 'Ν': stats_after[team_high]['greek_yes'] += 1
+                # FIX: Support both Ν and N
+                if s.greek_knowledge in ['Ν', 'N']: stats_after[team_high]['greek_yes'] += 1
         
         for name in names_in:
             if name in self.students:
@@ -840,7 +841,8 @@ class UnifiedProcessor:
                 if s.choice == 3: stats_after[team_low]['ep3'] -= 1
                 if s.gender == 'Α': stats_after[team_low]['boys'] -= 1
                 elif s.gender == 'Κ': stats_after[team_low]['girls'] -= 1
-                if s.greek_knowledge == 'Ν': stats_after[team_low]['greek_yes'] -= 1
+                # FIX: Support both Ν and N
+                if s.greek_knowledge in ['Ν', 'N']: stats_after[team_low]['greek_yes'] -= 1
         
         for name in names_out:
             if name in self.students:
@@ -848,7 +850,8 @@ class UnifiedProcessor:
                 if s.choice == 3: stats_after[team_low]['ep3'] += 1
                 if s.gender == 'Α': stats_after[team_low]['boys'] += 1
                 elif s.gender == 'Κ': stats_after[team_low]['girls'] += 1
-                if s.greek_knowledge == 'Ν': stats_after[team_low]['greek_yes'] += 1
+                # FIX: Support both Ν and N
+                if s.greek_knowledge in ['Ν', 'N']: stats_after[team_low]['greek_yes'] += 1
         
         ep3_before = max(s['ep3'] for s in stats_before.values()) - min(s['ep3'] for s in stats_before.values())
         ep3_after = max(s['ep3'] for s in stats_after.values()) - min(s['ep3'] for s in stats_after.values())
@@ -1094,7 +1097,9 @@ def main():
     
     with st.expander("📖 Οδηγίες Χρήσης", expanded=False):
         st.markdown("""
-        **FIX v3.9 FINAL:** Use .startswith() όπως working code (robust για ΝΑΙ/ΟΧΙ)
+        **FIX v3.9 FINAL:** 
+        - ✅ Use .startswith() όπως working code (robust για ΝΑΙ/ΟΧΙ)
+        - ✅ Support Ν/N variants σε ΟΛΑ τα σημεία (_get_team_stats + _calc_asymmetric_improvement)
         
         **Workflow:**
         1. Ανέβασε **Παράδειγμα1.xlsx** (δεδομένα μαθητών)
@@ -1103,11 +1108,6 @@ def main():
         4. Κατέβασε **ΒΕΛΤΙΩΜΕΝΗ_ΚΑΤΑΝΟΜΗ.xlsx**
         
         **Στόχοι:** Spread Επ3 ≤3, Φύλου ≤4, Γνώσης ≤4
-        
-        **Τι διορθώθηκε:**
-        - ✅ Σωστή ανάγνωση Ν/Ο (support 'ΝΑΙ'/'ΟΧΙ' strings)
-        - ✅ Σωστή μέτρηση Greek knowledge
-        - ✅ Locked = ΖΩΗΡΟΣ/ΠΑΙΔΙ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ (όχι γλώσσα)
         """)
     
     col1, col2 = st.columns(2)
@@ -1219,7 +1219,7 @@ def main():
                     with st.expander("Λεπτομέρειες"):
                         import traceback
                         st.code(traceback.format_exc())
-    else:
+     else:
         st.info("👆 Ανέβασε και τα δύο αρχεία")
     
     st.markdown("---")
