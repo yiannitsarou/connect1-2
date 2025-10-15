@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unified Team Optimizer - Fill & Optimize in 1-Click
-FIX v3.9.2 FINAL: Correct Greek knowledge reading and writing
+FIX v3.9.3 FINAL: Fixed Phase 2 data loading from actual student_data
 """
 import streamlit as st
 import openpyxl
@@ -94,17 +94,22 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                # FIX v3.9.2: Try multiple column name variants for Greek knowledge
+                # FIX v3.9.3: Try multiple column name variants for Greek knowledge
                 greek_raw = None
+                found_greek_column = False
                 for possible_header in ['ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ ΓΝΩΣΗ ΕΛΛΗΝΙΚΩΝ', 
                                        'ΚΑΛΗ_ΓΝΩΣΗ', 'ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ']:
-                    greek_raw = safe_get(possible_header, None)
-                    if greek_raw is not None:
-                        break
+                    if possible_header in headers:
+                        greek_raw = safe_get(possible_header, None)
+                        if greek_raw is not None and greek_raw != '':
+                            found_greek_column = True
+                            break
                 
                 # Process Greek knowledge value
-                if greek_raw is None or greek_raw == '':
-                    greek_val = 'Ν'  # Default to ΝΑΙ only if empty
+                if not found_greek_column or greek_raw is None or greek_raw == '':
+                    # Skip this student if no Greek knowledge column found
+                    st.warning(f"⚠️ Μαθητής {name}: Δεν βρέθηκε στήλη ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ - παραλείπεται")
+                    continue
                 else:
                     greek_str = str(greek_raw).strip().upper()
                     
@@ -114,7 +119,7 @@ class UnifiedProcessor:
                     elif greek_str.startswith('Ο') or greek_str.startswith('O'):
                         greek_val = 'Ο'  # ΟΧΙ
                     else:
-                        print(f"⚠️ Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
+                        st.warning(f"⚠️ Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
                         greek_val = 'Ν'
                 
                 self.students_data[name] = StudentData(
@@ -451,6 +456,7 @@ class UnifiedProcessor:
             if not name_a or not name_b or not category:
                 continue
             
+            # Parse επίδοση
             epidosh_a, epidosh_b = 1, 1
             if ',' in epidosh_raw:
                 parts = epidosh_raw.split(',')
@@ -460,22 +466,20 @@ class UnifiedProcessor:
                 except:
                     pass
             
-            gender_a = gender_b = 'Α'
-            greek_a = greek_b = 'Ν'
+            # FIX v3.9.3: Get real data from students_data instead of guessing from category
+            sa = self.students_data.get(name_a)
+            sb = self.students_data.get(name_b)
             
-            if 'Αγόρια' in category or 'Αγόρ' in category:
-                gender_a = gender_b = 'Α'
-            elif 'Κορίτσια' in category or 'Κορίτ' in category:
-                gender_a = gender_b = 'Κ'
+            # Use actual data from Phase 1
+            gender_a = sa.gender if sa else 'Α'
+            gender_b = sb.gender if sb else 'Α'
             
-            if 'όχι Καλή Γνώση' in category or 'όχι καλή' in category.lower():
-                greek_a = greek_b = 'Ο'
-            elif 'Καλή Γνώση' in category or 'Καλή γνώση' in category:
-                greek_a = greek_b = 'Ν'
-            elif 'Μικτής' in category or 'μικτής' in category.lower():
-                greek_a = greek_b = 'Ν'
+            greek_a = sa.greek_knowledge if sa else 'Ν'
+            greek_b = sb.greek_knowledge if sb else 'Ν'
             
-            is_locked = (locked_val == 'LOCKED')
+            # Unified LOCKED logic based on actual fields
+            is_locked = (self._is_student_locked(sa) if sa else False) or \
+                       (self._is_student_locked(sb) if sb else False)
             
             if name_a not in self.students:
                 self.students[name_a] = Student(
@@ -1105,12 +1109,13 @@ def main():
         layout="wide"
     )
     
-    st.title("🎯 Unified Team Optimizer v3.9.2 FINAL")
+    st.title("🎯 Unified Team Optimizer v3.9.3 FINAL")
     st.markdown("---")
     
     with st.expander("📖 Οδηγίες Χρήσης", expanded=False):
         st.markdown("""
-        **FIX v3.9.2 FINAL:** 
+        **FIX v3.9.3 FINAL:** 
+        - ✅ Fixed Phase 2: Uses actual student_data instead of guessing from category
         - ✅ Correct Greek knowledge reading from source (Ν/Ο)
         - ✅ Correct Greek knowledge writing to target Excel
         - ✅ Support Ν/N variants σε ΟΛΑ τα σημεία
@@ -1236,7 +1241,7 @@ def main():
         st.info("👆 Ανέβασε και τα δύο αρχεία")
     
     st.markdown("---")
-    st.success("✅ v3.9.2 FINAL | Fixed Greek knowledge reading & writing")
+    st.success("✅ v3.9.3 FINAL | Fixed Phase 2 data loading from actual student_data")
 
 
 if __name__ == '__main__':
