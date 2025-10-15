@@ -94,19 +94,19 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                # Read greek knowledge (Ν/Ο) - Support BOTH Greek and Latin O!
+                # FIX v3.9: Use .startswith() like working code
                 greek_raw = safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', None)
                 
                 if greek_raw is None or greek_raw == '':
-                    greek_val = 'Ν'
+                    greek_val = 'Ν'  # Default to ΝΑΙ only if empty
                 else:
-                    greek_str = greek_raw.strip().upper()
+                    greek_str = str(greek_raw).strip().upper()
                     
-                    # Support BOTH Greek Ο (U+039F) and Latin O (U+004F)
-                    if greek_str in ['Ο', 'O']:  # Greek Omicron OR Latin O
-                        greek_val = 'Ο'  # Always store as Greek Ο
-                    elif greek_str in ['Ν', 'N']:  # Greek Nu OR Latin N
-                        greek_val = 'Ν'  # Always store as Greek Ν
+                    # Use startswith() - πιάνει 'Ν', 'ΝΑΙ', 'N', etc.
+                    if greek_str.startswith('Ν') or greek_str.startswith('N'):
+                        greek_val = 'Ν'  # ΝΑΙ
+                    elif greek_str.startswith('Ο') or greek_str.startswith('O'):
+                        greek_val = 'Ο'  # ΟΧΙ
                     else:
                         print(f"⚠️  Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
                         greek_val = 'Ν'
@@ -511,13 +511,13 @@ class UnifiedProcessor:
             
             gender = self._get_cell_value(sheet, row_idx, gender_col, 'Α')
             
+            # Greek knowledge - use startswith() like working code
             raw_greek = sheet.cell(row_idx, greek_col).value if greek_col else 'Ν'
             if raw_greek:
                 greek_str = str(raw_greek).strip().upper()
-                # Support BOTH Greek Ο and Latin O
-                if greek_str in ['Ν', 'N']:
+                if greek_str.startswith('Ν') or greek_str.startswith('N'):
                     greek = 'Ν'
-                elif greek_str in ['Ο', 'O']:
+                elif greek_str.startswith('Ο') or greek_str.startswith('O'):
                     greek = 'Ο'
                 else:
                     greek = 'Ν'
@@ -1089,13 +1089,12 @@ def main():
         layout="wide"
     )
     
-    st.title("🎯 Unified Team Optimizer v3.5")
+    st.title("🎯 Unified Team Optimizer v3.9 FINAL")
     st.markdown("---")
     
     with st.expander("📖 Οδηγίες Χρήσης", expanded=False):
         st.markdown("""
-        **FIX v3.5:** CRITICAL - Locked fields είναι τα ΖΩΗΡΟΣ/ΠΑΙΔΙ_ΕΚΠΑΙΔΕΥΤΙΚΟΥ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ (Ν=locked).
-        Η ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ είναι απλά χαρακτηριστικό για balancing!
+        **FIX v3.9 FINAL:** Use .startswith() όπως working code (robust για ΝΑΙ/ΟΧΙ)
         
         **Workflow:**
         1. Ανέβασε **Παράδειγμα1.xlsx** (δεδομένα μαθητών)
@@ -1104,6 +1103,11 @@ def main():
         4. Κατέβασε **ΒΕΛΤΙΩΜΕΝΗ_ΚΑΤΑΝΟΜΗ.xlsx**
         
         **Στόχοι:** Spread Επ3 ≤3, Φύλου ≤4, Γνώσης ≤4
+        
+        **Τι διορθώθηκε:**
+        - ✅ Σωστή ανάγνωση Ν/Ο (support 'ΝΑΙ'/'ΟΧΙ' strings)
+        - ✅ Σωστή μέτρηση Greek knowledge
+        - ✅ Locked = ΖΩΗΡΟΣ/ΠΑΙΔΙ/ΙΔΙΑΙΤΕΡΟΤΗΤΑ (όχι γλώσσα)
         """)
     
     col1, col2 = st.columns(2)
@@ -1221,7 +1225,7 @@ def main():
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: gray;'>"
-        "v3.6 | FIX: Support Greek Ο + Latin O for ΚΑΛΗ_ΓΝΩΣΗ ⚡"
+        "v3.9 FINAL | Using .startswith() from working code ✅"
         "</div>",
         unsafe_allow_html=True
     )
