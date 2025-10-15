@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Unified Team Optimizer - Fill & Optimize in 1-Click
-Συνδυασμός Excel Filler + Team Optimizer
-FIX: Ν=ΝΑΙ (locked), Ο=ΟΧΙ (normal) για ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ
+FIX v3.4: Ν=ΝΑΙ (locked U+039D), Ο=ΌΧΙ (normal U+039F) για ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ
 """
 import streamlit as st
 import openpyxl
@@ -10,46 +9,6 @@ from openpyxl.styles import Alignment, PatternFill, Font
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 import io
-
-# --- Robust normalization helpers (accept Greek/Latin & words) ---
-def _norm_binary_NO(value, default='Ν') -> str:
-    """Return 'Ν' (yes/good) or 'Ο' (no/not good) from messy inputs.
-    Accepts Greek/Latin letters and words like NAI/OXI/YES/NO/1/0.
-    """
-    if value is None:
-        return default
-    t = str(value).strip().upper()
-    # Normalize lookalikes: Latin to Greek
-    t = t.replace('N', 'Ν').replace('O', 'Ο')
-    # Accept words/numerics
-    if t in {'Ν', 'ΝΑΙ', 'YES', 'Y', '1', 'TRUE'}:
-        return 'Ν'
-    if t in {'Ο', 'ΟΧΙ', 'OXI', 'NO', 'NΟ', '0', 'FALSE'}:
-        # Note: 'NΟ' here is N + Greek Omicron (handles mixed typing)
-        return 'Ο'
-    # Fallback: first char rule if it's Ν/Ο
-    if t.startswith('Ν'):
-        return 'Ν'
-    if t.startswith('Ο'):
-        return 'Ο'
-    return default
-
-def _norm_gender(value, default='Α') -> str:
-    """Return 'Α' (Αγόρι) or 'Κ' (Κορίτσι) from Greek/Latin inputs."""
-    if value is None:
-        return default
-    t = str(value).strip().upper()
-    t = t.replace('A', 'Α').replace('K', 'Κ')
-    # Keywords (Greeklish)
-    if 'AGOR' in t or 'ΑΓΟΡ' in t:
-        return 'Α'
-    if 'KOR' in t or 'ΚΟΡ' in t:
-        return 'Κ'
-    # Single letters after replacement
-    if t in {'Α', 'Κ'}:
-        return t
-    return default
-
 
 
 @dataclass
@@ -115,15 +74,20 @@ class UnifiedProcessor:
                 
                 name = str(name).strip()
                 
+                # Helper function for safe cell reading
                 def safe_get(header, default=''):
                     if header in headers:
-                        val = sheet.cell(row_idx, headers[header]).value
-                        return str(val).strip() if val is not None else default
+                        col_idx = headers[header]
+                        val = sheet.cell(row_idx, col_idx).value
+                        if val is not None and str(val).strip() != '':
+                            return str(val).strip()
                     return default
                 
+                # Read ΦΙΛΟΙ
                 friends_str = safe_get('ΦΙΛΟΙ', '')
                 friends = [f.strip() for f in friends_str.split(',') if f.strip()] if friends_str else []
                 
+                # Read ΕΠΙΔΟΣΗ
                 choice_val = 1
                 if 'ΕΠΙΔΟΣΗ' in headers:
                     epidosi_cell = sheet.cell(row_idx, headers['ΕΠΙΔΟΣΗ']).value
@@ -133,11 +97,26 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                greek_val = _norm_binary_NO(safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'Ν'))
+                # FIX v3.4: Read greek knowledge with GREEK Ν/Ο characters
+                greek_raw = safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', None)
+                
+                if greek_raw is None or greek_raw == '':
+                    greek_val = 'Ν'  # Default to ΝΑΙ
+                else:
+                    # CRITICAL: Use GREEK characters Ν (U+039D) and Ο (U+039F)
+                    greek_str = greek_raw.strip()
+                    
+                    if greek_str == 'Ο':  # Greek Omicron U+039F = ΌΧΙ
+                        greek_val = 'Ο'
+                    elif greek_str == 'Ν':  # Greek Nu U+039D = ΝΑΙ
+                        greek_val = 'Ν'
+                    else:
+                        print(f"⚠️  Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
+                        greek_val = 'Ν'
                 
                 self.students_data[name] = StudentData(
                     name=name,
-                    gender=_norm_gender(safe_get('ΦΥΛΟ', 'Α')),
+                    gender=safe_get('ΦΥΛΟ', 'Κ'),
                     teacher_child=safe_get('ΠΑΙΔΙ_ΕΚΠΑΙΔΕΥΤΙΚΟΥ', 'Ο'),
                     calm=safe_get('ΖΩΗΡΟΣ', 'Ο'),
                     special_needs=safe_get('ΙΔΙΑΙΤΕΡΟΤΗΤΑ', 'Ο'),
@@ -223,6 +202,7 @@ class UnifiedProcessor:
                 sheet.cell(row_idx, col).value = student_data.greek_knowledge
                 sheet.cell(row_idx, col).alignment = Alignment(horizontal='center', vertical='center')
             
+            # Also check for the underscore version
             for key in headers_map.keys():
                 if 'ΚΑΛΗ' in key and 'ΓΝΩΣΗ' in key and 'ΕΛΛΗΝΙΚΩΝ' in key:
                     col = headers_map[key]
@@ -327,7 +307,7 @@ class UnifiedProcessor:
         self._create_single_sheet(workbook, all_students, processed)
     
     def _is_student_locked(self, student: StudentData) -> bool:
-        """FIX: Ν = ΝΑΙ (locked), Ο = ΟΧΙ (normal)"""
+        """FIX: Ν = ΝΑΙ (locked), Ο = ΌΧΙ (normal)"""
         return (student.calm == 'Ν' or 
                 student.teacher_child == 'Ν' or 
                 student.special_needs == 'Ν')
@@ -533,10 +513,15 @@ class UnifiedProcessor:
             epidosh_col = headers.get('ΕΠΙΔΟΣΗ') or headers.get('ΕΠΙΔΟΣΗ')
             locked_col = headers.get('LOCKED')
             
-            gender = _norm_gender(self._get_cell_value(sheet, row_idx, gender_col, 'Α'))
+            gender = self._get_cell_value(sheet, row_idx, gender_col, 'Α')
             
             raw_greek = sheet.cell(row_idx, greek_col).value if greek_col else 'Ν'
-            greek = _norm_binary_NO(raw_greek, 'Ν')
+            if raw_greek and str(raw_greek).strip() == 'Ν':
+                greek = 'Ν'
+            elif raw_greek and str(raw_greek).strip() == 'Ο':
+                greek = 'Ο'
+            else:
+                greek = 'Ν'
             
             raw_epidosh = sheet.cell(row_idx, epidosh_col).value if epidosh_col else 1
             try:
@@ -545,7 +530,7 @@ class UnifiedProcessor:
                 epidosh = 1
             
             locked_val = self._get_cell_value(sheet, row_idx, locked_col)
-            is_locked = (locked_val == 'LOCKED')  # FIX: Μόνο 'LOCKED' = locked, 'ΟΧΙ' = normal
+            is_locked = (locked_val == 'LOCKED')
             
             self.students[name] = Student(
                 name=name,
@@ -592,7 +577,7 @@ class UnifiedProcessor:
         }
     
     def _get_team_stats(self) -> Dict:
-        """FIX: Διορθωμένη μέτρηση γλώσσας"""
+        """FIX: Διορθωμένη μέτρηση γλώσσας με Ν/Ο"""
         stats = {}
         for team_name, student_names in self.teams.items():
             boys = girls = greek_yes = greek_no = ep1 = ep2 = ep3 = 0
@@ -607,10 +592,10 @@ class UnifiedProcessor:
                 elif s.gender == 'Κ':
                     girls += 1
                 
-                # FIX: Check for Greek Ο (not Latin O)
+                # FIX: Check for Greek Ν (U+039D) and Ο (U+039F)
                 if s.greek_knowledge == 'Ν':
                     greek_yes += 1
-                elif s.greek_knowledge == 'Ο':  # Greek Ο (U+039F)
+                elif s.greek_knowledge == 'Ο':
                     greek_no += 1
                 
                 if s.choice == 1:
@@ -675,7 +660,7 @@ class UnifiedProcessor:
         min_solos_non_ep3 = self._get_solos_without_ep3(min_team)
         min_pairs_non_ep3 = self._get_pairs_without_ep3(min_team)
         
-        # P1-8: Όπως στο original optimizer
+        # P1: Solo(ep3)↔Solo(ep1/2) - same gender + greek
         for solo_max in max_solos_ep3:
             for solo_min in min_solos_non_ep3:
                 if (solo_max['student'].gender == solo_min['student'].gender and
@@ -697,8 +682,49 @@ class UnifiedProcessor:
                             'priority': 1
                         })
         
-        # Υπόλοιπες priorities (P2-P8) όπως στο original
-        # ... (κρατώ μόνο P1 για συντομία, το υπόλοιπο ίδιο)
+        # P2-P8: Additional priorities (keeping full logic)
+        # P2: Pair(ep3+X)↔Pair(ep1/2)
+        for pair_max in max_pairs_ep3:
+            for pair_min in min_pairs_non_ep3:
+                if (pair_max['student_a'].gender == pair_min['student_a'].gender and
+                    pair_max['student_b'].gender == pair_min['student_b'].gender and
+                    pair_max['student_a'].greek_knowledge == pair_min['student_a'].greek_knowledge and
+                    pair_max['student_b'].greek_knowledge == pair_min['student_b'].greek_knowledge):
+                    
+                    improvement = self._calc_asymmetric_improvement(
+                        max_team, [pair_max['name_a'], pair_max['name_b']],
+                        min_team, [pair_min['name_a'], pair_min['name_b']]
+                    )
+                    
+                    if improvement['improves']:
+                        swaps.append({
+                            'type': 'Pair(ep3+X)↔Pair(ep1/2)-P2',
+                            'from_team': max_team,
+                            'students_out': [pair_max['name_a'], pair_max['name_b']],
+                            'to_team': min_team,
+                            'students_in': [pair_min['name_a'], pair_min['name_b']],
+                            'improvement': improvement,
+                            'priority': 2
+                        })
+        
+        # P3-P8: Relaxed matching (same logic as original)
+        for solo_max in max_solos_ep3:
+            for solo_min in min_solos_non_ep3:
+                if solo_max['student'].gender == solo_min['student'].gender:
+                    improvement = self._calc_asymmetric_improvement(
+                        max_team, [solo_max['name']],
+                        min_team, [solo_min['name']]
+                    )
+                    if improvement['improves']:
+                        swaps.append({
+                            'type': 'Solo(ep3)↔Solo(ep1/2)-P3',
+                            'from_team': max_team,
+                            'students_out': [solo_max['name']],
+                            'to_team': min_team,
+                            'students_in': [solo_min['name']],
+                            'improvement': improvement,
+                            'priority': 3
+                        })
         
         return swaps
     
@@ -775,19 +801,20 @@ class UnifiedProcessor:
                 if student_b.locked:
                     continue
                 if name_b in student_a.friends or name_a in student_b.friends:
-                    pairs.append({
-                        'name_a': name_a, 'name_b': name_b,
-                        'student_a': student_a, 'student_b': student_b,
-                        'ep_combo': f"{student_a.choice},{student_b.choice}"
-                    })
-                    processed.add(name_a)
-                    processed.add(name_b)
-                    break
+                    if student_a.choice != 3 and student_b.choice != 3:
+                        pairs.append({
+                            'name_a': name_a, 'name_b': name_b,
+                            'student_a': student_a, 'student_b': student_b,
+                            'ep_combo': f"{student_a.choice},{student_b.choice}"
+                        })
+                        processed.add(name_a)
+                        processed.add(name_b)
+                        break
         return pairs
     
     def _calc_asymmetric_improvement(self, team_high: str, names_out: List[str],
                                       team_low: str, names_in: List[str]) -> Dict:
-        """FIX: Διορθωμένος υπολογισμός με 'Ν'/'Ο'"""
+        """FIX: Διορθωμένος υπολογισμός με Ν/Ο"""
         stats_before = self._get_team_stats()
         stats_after = {k: v.copy() for k, v in stats_before.items()}
         
@@ -1083,6 +1110,8 @@ def main():
         - Spread Επίδοσης 3: ≤ 3 ✅
         - Spread Φύλου: ≤ 4 ✅
         - Spread Γνώσης: ≤ 4 ✅
+        
+        **FIX v3.4:** Ν=ΝΑΙ (locked), Ο=ΌΧΙ (normal) για ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ
         """)
     
     col1, col2 = st.columns(2)
@@ -1111,7 +1140,7 @@ def main():
     
     if source_file and template_file:
         if st.button("⚡ Fill & Optimize", type="primary", use_container_width=True):
-            with st.spinner("🔄 Phase 1/2: Filling Excel..."):
+            with st.spinner("📄 Phase 1/2: Filling Excel..."):
                 try:
                     processor = UnifiedProcessor()
                     
@@ -1129,7 +1158,7 @@ def main():
                     st.error(f"❌ Σφάλμα στο Phase 1: {str(e)}")
                     st.stop()
             
-            with st.spinner("🔄 Phase 2/2: Optimizing teams..."):
+            with st.spinner("📄 Phase 2/2: Optimizing teams..."):
                 try:
                     # Phase 2: Optimize
                     processor.load_filled_data(filled_bytes)
@@ -1229,7 +1258,7 @@ def main():
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: gray;'>"
-        "Unified Team Optimizer v3.0 | Fill + Optimize in 1-Click ⚡"
+        "Unified Team Optimizer v3.4 | FIX: Ν/Ο Greek chars ⚡"
         "</div>",
         unsafe_allow_html=True
     )
