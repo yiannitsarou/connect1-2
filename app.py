@@ -108,7 +108,7 @@ class UnifiedProcessor:
                     elif greek_str.startswith('Ο') or greek_str.startswith('O'):
                         greek_val = 'Ο'  # ΟΧΙ
                     else:
-                        print(f"⚠️  Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
+                        print(f"⚠️ Unknown ΚΑΛΗ_ΓΝΩΣΗ '{greek_raw}' for {name}, defaulting to Ν")
                         greek_val = 'Ν'
                 
                 self.students_data[name] = StudentData(
@@ -1128,7 +1128,7 @@ def main():
     
     if source_file and template_file:
         if st.button("⚡ Fill & Optimize", type="primary", use_container_width=True):
-            with st.spinner("📄 Phase 1/2: Filling..."):
+            with st.spinner("🔄 Phase 1/2: Filling..."):
                 try:
                     processor = UnifiedProcessor()
                     source_bytes = source_file.read()
@@ -1144,7 +1144,7 @@ def main():
                     st.error(f"❌ Σφάλμα Phase 1: {str(e)}")
                     st.stop()
             
-            with st.spinner("📄 Phase 2/2: Optimizing..."):
+            with st.spinner("🔄 Phase 2/2: Optimizing..."):
                 try:
                     processor.load_filled_data(filled_bytes)
                     spreads_before = processor.calculate_spreads()
@@ -1219,16 +1219,11 @@ def main():
                     with st.expander("Λεπτομέρειες"):
                         import traceback
                         st.code(traceback.format_exc())
-     else:
+    else:
         st.info("👆 Ανέβασε και τα δύο αρχεία")
     
     st.markdown("---")
-    st.markdown(
-        "<div style='text-align: center; color: gray;'>"
-        "v3.9 FINAL | Using .startswith() from working code ✅"
-        "</div>",
-        unsafe_allow_html=True
-    )
+    st.success("✅ v3.9 FINAL | Using .startswith() from working code")
 
 
 if __name__ == '__main__':
