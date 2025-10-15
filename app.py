@@ -94,8 +94,13 @@ class UnifiedProcessor:
                         except:
                             choice_val = 1
                 
-                # FIX v3.9: Use .startswith() like working code
-                greek_raw = safe_get('ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', None)
+                # FIX v3.9.1: Try multiple column name variants for Greek knowledge
+                greek_raw = None
+                for possible_header in ['ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ ΓΝΩΣΗ ΕΛΛΗΝΙΚΩΝ', 
+                                       'ΚΑΛΗ_ΓΝΩΣΗ', 'ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ']:
+                    greek_raw = safe_get(possible_header, None)
+                    if greek_raw is not None:
+                        break
                 
                 if greek_raw is None or greek_raw == '':
                     greek_val = 'Ν'  # Default to ΝΑΙ only if empty
