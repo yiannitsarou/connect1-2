@@ -669,7 +669,7 @@ class UnifiedProcessor:
         return applied_swaps, final_spreads
     
     def _generate_asymmetric_swaps(self, max_team: str, min_team: str) -> List[Dict]:
-        """Γέννηση asymmetric swaps"""
+        """Γέννηση asymmetric swaps - ALL PRIORITIES for maximum optimization"""
         swaps = []
         
         max_solos_ep3 = self._get_solos_with_ep3(max_team)
@@ -677,7 +677,7 @@ class UnifiedProcessor:
         min_solos_non_ep3 = self._get_solos_without_ep3(min_team)
         min_pairs_non_ep3 = self._get_pairs_without_ep3(min_team)
         
-        # P1: Solo(ep3)↔Solo(ep1/2) - same gender + greek
+        # P1: Solo(ep3)↔Solo(ep1/2) - same gender + greek (STRICTEST)
         for solo_max in max_solos_ep3:
             for solo_min in min_solos_non_ep3:
                 if (solo_max['student'].gender == solo_min['student'].gender and
@@ -699,7 +699,7 @@ class UnifiedProcessor:
                             'priority': 1
                         })
         
-        # P2: Pair swaps
+        # P2: Pair swaps - same gender + greek for both pairs
         for pair_max in max_pairs_ep3:
             for pair_min in min_pairs_non_ep3:
                 if (pair_max['student_a'].gender == pair_min['student_a'].gender and
@@ -723,10 +723,14 @@ class UnifiedProcessor:
                             'priority': 2
                         })
         
-        # P3: Relaxed (only gender match)
+        # P3: Relaxed solo swaps - only gender match (allows greek knowledge mismatch)
         for solo_max in max_solos_ep3:
             for solo_min in min_solos_non_ep3:
                 if solo_max['student'].gender == solo_min['student'].gender:
+                    # Skip if already covered by P1
+                    if solo_max['student'].greek_knowledge == solo_min['student'].greek_knowledge:
+                        continue
+                    
                     improvement = self._calc_asymmetric_improvement(
                         max_team, [solo_max['name']],
                         min_team, [solo_min['name']]
