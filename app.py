@@ -125,7 +125,7 @@ class UnifiedProcessor:
         return output.getvalue()
     
     def _fill_sheet(self, sheet, team_name: str) -> int:
-        """Συμπλήρωση ενός sheet"""
+        """Συμπλήρωση ενός sheet - FIX: Προσθήκη στηλών αν λείπουν"""
         headers_map = {}
         for col_idx, cell in enumerate(sheet[1], start=1):
             if cell.value:
@@ -135,6 +135,21 @@ class UnifiedProcessor:
         
         if 'ΟΝΟΜΑ' not in headers_map:
             return 0
+        
+        # FIX: Αν το template έχει μόνο ΟΝΟΜΑ, προσθέτουμε headers
+        required_headers = ['ΦΥΛΟ', 'ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ', 'ΕΠΙΔΟΣΗ', 'ΦΙΛΟΙ']
+        next_col = max(headers_map.values()) + 1
+        
+        for req_header in required_headers:
+            if req_header not in headers_map:
+                # Προσθήκη header
+                cell = sheet.cell(1, next_col)
+                original_header = req_header.replace('ΚΑΛΗΓΝΩΣΗΕΛΛΗΝΙΚΩΝ', 'ΚΑΛΗ_ΓΝΩΣΗ_ΕΛΛΗΝΙΚΩΝ')
+                cell.value = original_header
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                cell.font = Font(bold=True)
+                headers_map[req_header] = next_col
+                next_col += 1
         
         filled_count = 0
         
@@ -493,7 +508,7 @@ class UnifiedProcessor:
                 epidosh = 1
             
             locked_val = self._get_cell_value(sheet, row_idx, locked_col)
-            is_locked = (locked_val == 'LOCKED' or locked_val == 'ΟΧΙ')
+            is_locked = (locked_val == 'LOCKED')  # FIX: Μόνο 'LOCKED' = locked, 'ΟΧΙ' = normal
             
             self.students[name] = Student(
                 name=name,
